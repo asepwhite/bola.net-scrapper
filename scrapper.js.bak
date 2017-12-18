@@ -1,0 +1,50 @@
+const request = require('request')
+const cherrio = require('cheerio')
+const Promise = require('bluebird')
+const axios = require('axios')
+
+//liga indonesia, inggris, spanyol, italia, liga champion
+
+var url = "https://www.bola.net/inggris/index4.html"
+var section = "Liga inggris"
+var fs = require("fs")
+
+var newsUrls = []
+var newsContent = []
+var newsSection = []
+var docID = 1;
+
+axios.get(url).then(function(response){
+    var $ = cherrio.load(response.data)
+    $('.newslist').children('.item').each(function(i, elem){
+      var newsUrl = $(elem).find("a").attr('href')
+      newsUrls.push(newsUrl)
+    })
+    return  Promise.resolve(1)
+}).then(function(response){
+  var getArticleJobs = []
+  for (var index in newsUrls) {
+    var job = axios.get(newsUrls[index]).then(function(response){
+      var $ = cherrio.load(response.data)
+      var newsDate = $('.newsdatetime').text().split("|")[0]
+      var newsTitle = $('.newstitle').text()
+      var newsSection = section
+      var articleData = newsDate+"\n"+newsTitle+"\n"+newsSection+"\n"+$('.ncont').text()
+      // console.log(articleData)
+      newsContent.push(articleData)
+      return Promise.resolve(1)
+    })
+    getArticleJobs.push(job)
+  }
+  Promise.all(getArticleJobs).then(function(result){
+    for (var index in newsContent) {
+      var metaData = newsContent[index].split('\n');
+      var newsInXMLFormat = "<DOC>"+"\n"+"<DOCID> "+"Artikel "+docID+ "/<DOCID>"+"\n"+"<SO> BOLA.NET </SO>"+"\n"+"<SECTION> "+metaData[2]+" </SECTION>"+"\n"+"<DATETIME> "+metaData[0]+" </DATETIME>"+"\n"+"<TITLE> "+metaData[1]+" </TITLE>"+"\n"+"<TEXT>"
+      docID++;
+      newsContent[index] = metaData.slice(3).join("")
+      fs.appendFile('temp.txt', newsInXMLFormat+"\n"+newsContent[index].trim()+"\n"+"</TEXT>"+"\n"+"</DOC>"+"\n"+"\n", function(err){
+        console.log("news added!")
+      })
+    }
+  })
+})
